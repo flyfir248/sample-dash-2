@@ -32,6 +32,7 @@ app.layout = html.Div([
     html.Div(id='output-data-upload'),
 ])
 
+
 def parse_contents(contents, filename, date):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
