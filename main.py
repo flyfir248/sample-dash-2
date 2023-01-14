@@ -2,23 +2,53 @@ import dash
 from dash import dcc
 from dash import html
 import pandas as pd
-from dash.dependencies import Input, Output
-
-import numpy as np
+from dash.dependencies import Input, Output, State
+import base64
+import datetime
+import io
 
 app = dash.Dash()
-
-df = pd.DataFrame({'x': np.linspace(0, 10, 100),
-                   'y': np.sin(np.linspace(0, 10, 100))})
-#df = pd.read_csv('data.csv')
-
-app.layout = html.Div(children=[
+app.layout = html.Div([
     html.H1(children='My Dashboard'),
     html.Hr(),
-    html.Div(children='''
-        A simple dashboard.
-    '''),
-    html.Div([
+    dcc.Upload(
+        id='upload-data',
+        children=html.Div([
+            'Drag and Drop or ',
+            html.A('Select Files')
+        ]),
+        style={
+            'width': '100%',
+            'height': '60px',
+            'lineHeight': '60px',
+            'borderWidth': '1px',
+            'borderStyle': 'dashed',
+            'borderRadius': '5px',
+            'textAlign': 'center',
+            'margin': '10px'
+        },
+        multiple=False
+    ),
+    html.Div(id='output-data-upload'),
+])
+
+def parse_contents(contents, filename, date):
+    content_type, content_string = contents.split(',')
+    decoded = base64.b64decode(content_string)
+    try:
+        if 'csv' in filename:
+            # Assume that the user uploaded a CSV file
+            df = pd.read_csv(
+                io.StringIO(decoded.decode('utf-8')))
+    except Exception as e:
+        print(e)
+        return html.Div([
+            'There was an error processing this file.'
+        ])
+    return html.Div([
+        html.H5(filename),
+        html.H6(datetime.datetime.fromtimestamp(date)),
+        html.Hr(),  # horizontal line
         dcc.Dropdown(
             id='xaxis-column',
             options=[{'label': i, 'value': i} for i in df.columns],
@@ -29,38 +59,22 @@ app.layout = html.Div(children=[
             options=[{'label': i, 'value': i} for i in ['Linear', 'Log']],
             value='Linear',
             labelStyle={'display': 'inline-block'}
+        ),
+        dcc.Graph(
+            id='indicator-graphic'
         )
-    ],
-    style={'width': '48%', 'display': 'inline-block'}),
+    ])
 
-    dcc.Graph(
-        id='indicator-graphic'
-    )
-])
-
-@app.callback(
-    Output('indicator-graphic', 'figure'),
-    [Input('xaxis-column', 'value'),
-     Input('xaxis-type', 'value')])
-def update_graph(xaxis_column_name, xaxis_type):
-    return {
-        'data': [dict(
-            x=df[xaxis_column_name],
-            y=df['y'],
-            type='line'
-        )],
-        'layout': dict(
-            xaxis={
-                'title': xaxis_column_name,
-                'type': 'linear' if xaxis_type == 'Linear' else 'log'
-            },
-            yaxis={
-                'title': 'y',
-            },
-            margin={'l': 40, 'b': 40, 't': 10, 'r': 0},
-            hovermode='closest'
-        )
-    }
+@app.callback(Output('output-data-upload', 'children'),
+              [Input('upload-data', 'contents')],
+              [State('upload-data', 'filename'),
+               State('upload-data', 'last_modified')])
+def update_output(list_of_contents, list_of_names, list_of_dates):
+    if list_of_contents is not None:
+        children = [
+            parse_contents(c, n, d) for c, n, d in
+            zip(list_of_contents, list_of_names, list_of_dates)]
+        return children
 
 if __name__ == '__main__':
     app.run_server(debug=True)
